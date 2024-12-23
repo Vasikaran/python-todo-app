@@ -3,10 +3,10 @@ from firebase_admin import firestore
 from src.utils import verify_firebase_token
 from flask_cors import cross_origin
 
-
 todos_routes = Blueprint('todos', __name__)
 
 db = firestore.client()
+
 
 @todos_routes.route('', methods=['GET'], endpoint='get_todos')
 @verify_firebase_token
@@ -19,6 +19,7 @@ def get_todos():
         return jsonify({'todos': todos}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 @todos_routes.route('', methods=['POST', 'OPTIONS'], endpoint='add_todo')
 @verify_firebase_token
@@ -45,6 +46,7 @@ def add_todo():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @todos_routes.route('/<todo_id>', methods=['OPTIONS', 'POST'], endpoint='update_todo')
 @verify_firebase_token
 @cross_origin()
@@ -66,6 +68,7 @@ def update_todo(todo_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @todos_routes.route('/<todo_id>', methods=['OPTIONS', 'DELETE'], endpoint='delete_todo')
 @verify_firebase_token
 @cross_origin()
@@ -78,5 +81,34 @@ def delete_todo(todo_id):
         return jsonify({'message': 'Todo deleted successfully!'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
 
+
+@todos_routes.route('/search', methods=['GET'], endpoint='search_todos')
+@verify_firebase_token
+def search_todos():
+    try:
+        search_query = request.args.get('query', None)
+
+        if not search_query:
+            return jsonify([]), 200
+
+        user = request.user
+        user_ref = db.collection('users').document(user.get('uid'))
+
+        todos_ref = user_ref.collection('todos')
+
+        query = todos_ref.where('title', '>=', search_query).where(
+            'title', '<=', search_query + '\uf8ff')
+
+        todos_title = query.stream()
+
+        todos_list = []
+        for todo in todos_title:
+            todo_data = todo.to_dict()
+            todo_data['id'] = todo.id
+            todos_list.append(todo_data)
+
+        return jsonify(todos_list), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
